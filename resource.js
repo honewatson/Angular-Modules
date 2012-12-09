@@ -6,7 +6,7 @@
  * @description
  */
 
- /**
+/**
  * @ngdoc object
  * @name ngResource.$resource
  * @requires $http
@@ -22,7 +22,8 @@
  *   `/user/:username`.
  *
  * @param {Object=} paramDefaults Default values for `url` parameters. These can be overridden in
- *   `actions` methods.
+ *   `actions` methods. If any of the parameter value is a function, it will be executed every time
+  *  when a param value needs to be obtained for a request (unless the param was overriden).
  *
  *   Each key value in the parameter object is first bound to url template if present and then any
  *   excess keys are appended to the url search query after the `?`.
@@ -46,10 +47,12 @@
  *     resource object.
  *   - `method` – {string} – HTTP request method. Valid methods are: `GET`, `POST`, `PUT`, `DELETE`,
  *     and `JSONP`
- *   - `params` – {object=} – Optional set of pre-bound parameters for this action.
+ *   - `params` – {Object=} – Optional set of pre-bound parameters for this action. If any of the
+  *    parameter value is a function, it will be executed every time when a param value needs to be
+  *    obtained for a request (unless the param was overriden).
  *   - isArray – {boolean=} – If true then the returned object for this action is an array, see
  *     `returns` section.
- *   - `headers` – {object=} – Optional HTTP headers to send
+ *   - `headers` – {Object=} – Optional HTTP headers to send
  *
  * @returns {Object} A resource "class" object with methods for the default set of resource actions
  *   optionally extended with custom `actions`. The default set contains these actions:
@@ -225,46 +228,46 @@ angular.module('ngResource', ['ng']).
           return $parse(path)(obj);
         };
 
-  /**
-   * We need our custom mehtod because encodeURIComponent is too aggressive and doesn't follow
-   * http://www.ietf.org/rfc/rfc3986.txt with regards to the character set (pchar) allowed in path
-   * segments:
-   *    segment       = *pchar
-   *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-   *    pct-encoded   = "%" HEXDIG HEXDIG
-   *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
-   *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
-   *                     / "*" / "+" / "," / ";" / "="
-   */
-  function encodeUriSegment(val) {
-    return encodeUriQuery(val, true).
-      replace(/%26/gi, '&').
-      replace(/%3D/gi, '=').
-      replace(/%2B/gi, '+');
-  }
+    /**
+     * We need our custom mehtod because encodeURIComponent is too aggressive and doesn't follow
+     * http://www.ietf.org/rfc/rfc3986.txt with regards to the character set (pchar) allowed in path
+     * segments:
+     *    segment       = *pchar
+     *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
+     *    pct-encoded   = "%" HEXDIG HEXDIG
+     *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
+     *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
+     *                     / "*" / "+" / "," / ";" / "="
+     */
+    function encodeUriSegment(val) {
+      return encodeUriQuery(val, true).
+        replace(/%26/gi, '&').
+        replace(/%3D/gi, '=').
+        replace(/%2B/gi, '+');
+    }
 
 
-  /**
-   * This method is intended for encoding *key* or *value* parts of query component. We need a custom
-   * method becuase encodeURIComponent is too agressive and encodes stuff that doesn't have to be
-   * encoded per http://tools.ietf.org/html/rfc3986:
-   *    query       = *( pchar / "/" / "?" )
-   *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-   *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
-   *    pct-encoded   = "%" HEXDIG HEXDIG
-   *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
-   *                     / "*" / "+" / "," / ";" / "="
-   */
-  function encodeUriQuery(val, pctEncodeSpaces) {
-    return encodeURIComponent(val).
-      replace(/%40/gi, '@').
-      replace(/%3A/gi, ':').
-      replace(/%24/g, '$').
-      replace(/%2C/gi, ',').
-      replace((pctEncodeSpaces ? null : /%20/g), '+');
-  }
+    /**
+     * This method is intended for encoding *key* or *value* parts of query component. We need a custom
+     * method becuase encodeURIComponent is too agressive and encodes stuff that doesn't have to be
+     * encoded per http://tools.ietf.org/html/rfc3986:
+     *    query       = *( pchar / "/" / "?" )
+     *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
+     *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
+     *    pct-encoded   = "%" HEXDIG HEXDIG
+     *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
+     *                     / "*" / "+" / "," / ";" / "="
+     */
+    function encodeUriQuery(val, pctEncodeSpaces) {
+      return encodeURIComponent(val).
+        replace(/%40/gi, '@').
+        replace(/%3A/gi, ':').
+        replace(/%24/g, '$').
+        replace(/%2C/gi, ',').
+        replace((pctEncodeSpaces ? null : /%20/g), '+');
+    }
 
-  function Route(template, defaults) {
+    function Route(template, defaults) {
       this.template = template = template + '#';
       this.defaults = defaults || {};
       var urlParams = this.urlParams = {};
@@ -314,8 +317,9 @@ angular.module('ngResource', ['ng']).
 
       function extractParams(data, actionParams){
         var ids = {};
-        paramDefaults = extend(paramDefaults, actionParams);
-        forEach(paramDefaults || {}, function(value, key){
+        actionParams = extend({}, paramDefaults, actionParams);
+        forEach(actionParams, function(value, key){
+          if (isFunction(value)) { value = value(); }
           ids[key] = value.charAt && value.charAt(0) == '@' ? getter(data, value.substr(1)) : value;
         });
         return ids;
@@ -326,6 +330,7 @@ angular.module('ngResource', ['ng']).
       }
 
       forEach(actions, function(action, name) {
+        action.method = angular.uppercase(action.method);
         var hasBody = action.method == 'POST' || action.method == 'PUT' || action.method == 'PATCH';
         Resource[name] = function(a1, a2, a3, a4) {
           var params = {};
@@ -392,11 +397,6 @@ angular.module('ngResource', ['ng']).
         };
 
 
-        Resource.bind = function(additionalParamDefaults){
-          return ResourceFactory(url, extend({}, paramDefaults, additionalParamDefaults), actions);
-        };
-
-
         Resource.prototype['$' + name] = function(a1, a2, a3) {
           var params = extractParams(this),
               success = noop,
@@ -422,6 +422,11 @@ angular.module('ngResource', ['ng']).
           Resource[name].call(this, params, data, success, error);
         };
       });
+
+      Resource.bind = function(additionalParamDefaults){
+        return ResourceFactory(url, extend({}, paramDefaults, additionalParamDefaults), actions);
+      };
+
       return Resource;
     }
 
