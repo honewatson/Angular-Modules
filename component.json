@@ -1,8 +1,5 @@
 {
   "name": "angular-modules",
   "version": "1.0.0",
-  "main": ["resource.js", "cookies.js", "sanitize.js", "loader.js", "angular-mocks.js"],
-
-
-
+  "main": ["resource.js", "cookies.js", "sanitize.js", "loader.js", "angular-mocks.js"]
 }
